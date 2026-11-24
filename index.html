@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>字习 · 中文打字练习</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
   <aside class="sidebar">
@@ -12,6 +12,7 @@
     <nav class="section-nav" aria-label="练习类型">
       <button id="random-tab" class="nav-current" aria-pressed="true">随机练习</button>
       <button id="intro-tab" aria-pressed="false">系统课程</button>
+      <button id="training-tab" aria-pressed="false">专项训练</button>
       <button id="history-open" aria-haspopup="dialog">练习记录</button>
     </nav>
     <div class="random-summary"><span>累计随机练习</span><strong id="random-count">0 <small>组</small></strong><p id="last-score">完成一组后，这里会显示最近成绩。</p></div>
@@ -35,12 +36,23 @@
     </section>
     <nav class="lessons" aria-label="选择练习内容" id="lessons"></nav>
 
+    <section class="training-tools" id="training-tools" aria-label="专项训练设置" hidden>
+      <div class="training-settings" id="key-settings" hidden>
+        <label>键位阶段<select id="key-stage"></select></label>
+        <button type="button" class="secondary-button" id="key-hints-toggle" aria-pressed="true">键位提示</button>
+      </div>
+      <div id="training-summary" hidden>
+        <strong id="training-status"></strong><p id="training-detail"></p>
+        <button class="secondary-button" id="review-seed" hidden>先练一组常用词</button>
+      </div>
+    </section>
+
     <section class="random-settings" id="random-settings" aria-label="随机练习设置">
       <div class="setting-fields"><label id="level-field">词语难度<select id="level"><option value="easy">一级 · 日常双字</option><option value="daily">二级 · 生活办公</option><option value="phrases">三级 · 常用短语</option></select></label><label>练习长度<select id="length"><option value="0">轻练 · 10 词</option><option value="1">标准 · 20 词</option><option value="2">加练 · 30 词</option></select></label><button id="shuffle" class="primary-button">换一组</button></div>
       <p id="mode-description">熟悉常见双字词，练习一次选出整个词语。</p>
     </section>
 
-    <section class="practice" aria-labelledby="lesson-title">
+    <section class="practice" id="practice" aria-labelledby="lesson-title">
       <div class="practice-heading">
         <div><h2 id="lesson-title">常用词语</h2><span class="exercise-meta" id="lesson-number"></span></div>
         <div class="practice-actions">
@@ -57,7 +69,7 @@
         </div>
       </div>
       <div class="stats" aria-label="本次练习数据">
-        <div><span>打字速度</span><p><strong id="speed">—</strong><small>字/分钟</small></p></div>
+        <div><span>打字速度</span><p><strong id="speed">—</strong><small id="speed-unit">字/分钟</small></p></div>
         <div><span>准确率</span><p><strong id="accuracy">—</strong><small id="accuracy-unit"></small></p></div>
         <div><span>练习用时</span><p><strong id="time">00:00</strong></p></div>
         <div><span>已输入</span><p><strong id="typed-count">0</strong><small id="total-count"></small></p></div>
@@ -65,21 +77,28 @@
       <div class="exercise-body">
         <div class="text-heading"><span id="target-instruction">按顺序输入，词语之间直接接着打</span><div class="legend" aria-hidden="true"><span><i class="correct-dot"></i>正确</span><span><i class="wrong-dot"></i>错误</span><span><i class="current-dot"></i>当前</span></div></div>
         <div id="target" class="target" aria-label="练习原文"></div>
-        <label class="input-label" for="typing">你的输入</label>
-        <textarea id="typing" rows="2" spellcheck="false" autocomplete="off" autocapitalize="off" aria-describedby="input-help" placeholder="在这里输入上方的文字"></textarea>
+        <div class="typing-area">
+          <div class="typing-field">
+            <label class="input-label" for="typing">你的输入</label>
+            <textarea id="typing" rows="2" spellcheck="false" autocomplete="off" autocapitalize="off" aria-describedby="input-help" placeholder="在这里输入上方的文字"></textarea>
+          </div>
+          <div id="key-guide" class="key-guide" hidden>
+            <p id="key-finger"></p><div id="keymap" class="keymap" aria-hidden="true"></div>
+          </div>
+        </div>
         <div class="input-footer">
           <span id="input-help" role="status">开始组字时计时，选字后核对。</span>
           <div class="practice-actions"><button class="secondary-button" id="locate-error" hidden>定位错误</button><button class="secondary-button" id="pause" disabled>暂停练习</button></div>
         </div>
         <div class="result" id="result" hidden aria-live="polite">
           <div><strong id="result-title"></strong><p id="result-detail"></p><p id="result-advice" hidden></p></div>
-          <button class="primary-button" id="next">下一节</button>
+          <div class="practice-actions"><button class="secondary-button" id="review-misses" hidden>复练本次错字</button><button class="primary-button" id="next">下一节</button></div>
         </div>
       </div>
       <progress class="bottom-progress" id="progress-fill" aria-label="正确输入进度" value="0" max="1"></progress>
     </section>
 
-    <p class="practice-note">切走页面会自动暂停。下次打开时，可以从上次输入的位置继续。</p>
+    <p class="practice-note">切走页面会自动暂停。重新打开后，可继续最近一次未完成的练习。</p>
   </main>
   <dialog id="replace-dialog" aria-labelledby="replace-title" aria-describedby="replace-description">
     <h2 id="replace-title">开始新的练习？</h2><p id="replace-description">本次练习尚未完成。继续会清空当前输入，已完成记录会保留。</p>
@@ -88,14 +107,15 @@
   <dialog class="history-dialog" id="history-dialog" aria-labelledby="history-title">
     <header class="history-heading"><div><h2 id="history-title">练习记录</h2><p>查看最近 100 次完成的练习。</p></div><form method="dialog"><button class="secondary-button" autofocus>关闭</button></form></header>
     <div class="history-today" id="history-today"></div>
-    <label class="history-filter">练习类型<select id="history-filter"><option value="all">全部练习</option><option value="words">常用词语</option><option value="characters">常用单字</option><option value="sentences">汉语句子</option><option value="intro">系统课程</option></select></label>
+    <label class="history-filter">练习类型<select id="history-filter"><option value="all">全部练习</option><option value="words">常用词语</option><option value="characters">常用单字</option><option value="sentences">汉语句子</option><option value="intro">系统课程</option><option value="keyboard">键位盲打</option><option value="review">错字复练</option><option value="daily">每日挑战</option></select></label>
     <p id="history-empty" hidden></p>
     <div class="history-table-wrap" id="history-table-wrap" tabindex="0" role="region" aria-label="成绩表">
-      <table><thead><tr><th scope="col">完成时间</th><th scope="col">练习</th><th scope="col">用时</th><th scope="col">字/分钟</th><th scope="col">准确率</th></tr></thead><tbody id="history-rows"></tbody></table>
+      <table><thead><tr><th scope="col">完成时间</th><th scope="col">练习</th><th scope="col">用时</th><th scope="col">速度</th><th scope="col">准确率</th></tr></thead><tbody id="history-rows"></tbody></table>
     </div>
   </dialog>
   <script src="practice-data.js"></script>
   <script src="course-data.js"></script>
-  <script src="app.js"></script>
+  <script src="training-data.js"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

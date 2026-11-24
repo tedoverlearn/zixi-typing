@@ -88,6 +88,30 @@ select:not([multiple]) {
 .setting-fields .primary-button { margin-left: auto; }
 .random-settings > p, .practice-note { color: var(--muted); font-size: .875rem; margin-top: 8px; }
 
+.training-tools { margin: 0 0 16px; }
+.training-settings { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-bottom: 10px; }
+.training-settings label { display: grid; gap: 4px; color: var(--muted); font-size: .875rem; }
+#training-summary { background: #edf3fc; border-left: 3px solid #7198d9; border-radius: 0 7px 7px 0; padding: 10px 14px; font-size: .875rem; }
+#training-summary p { color: var(--muted); margin-top: 3px; }
+#review-seed { margin-top: 10px; }
+.key-guide { padding: 10px 12px; background: #f4f6fa; border: 1px solid var(--line); border-radius: 7px; }
+#key-finger { color: var(--blue); font-weight: 650; font-size: .875rem; margin-bottom: 8px; }
+.keymap { display: grid; gap: 4px; max-width: 436px; --key-size: min(38px, 7vw); }
+.keymap-row { display: flex; gap: 4px; }
+.keymap-row:nth-child(2) { padding-left: 5px; }
+.keymap-row:nth-child(3) { padding-left: 15px; }
+.keymap kbd { width: var(--key-size); aspect-ratio: 1.15; display: grid; place-items: center; position: relative; border-radius: 5px; border: 1px solid #becade; background: white; color: var(--ink); font-size: .9rem; }
+.keymap .home-key::after { position: absolute; content: ''; width: 30%; height: 2px; bottom: 4px; background: currentColor; border-radius: 2px; }
+.keymap .key-next { background: var(--blue); border-color: var(--blue); color: white; font-weight: 700; }
+.key-practice .target, .key-practice textarea { font-family: Consolas, "Courier New", monospace; letter-spacing: .05em; }
+.typing-area { display: grid; gap: 12px; }
+.typing-field { min-width: 0; }
+@media (min-width: 1050px) {
+  .key-practice .typing-area { display: flex; align-items: flex-start; }
+  .key-practice .typing-field { flex: 1 1 auto; }
+  .key-practice .key-guide { flex: 0 0 auto; }
+}
+
 .practice { background: var(--paper); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
 .practice-heading, .text-heading, .input-footer, .result, .history-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .practice-heading { padding: 15px 23px; }
@@ -135,6 +159,7 @@ textarea:read-only { background: #f3f6fa; }
 .input-footer .secondary-button { min-height: 34px; padding: 4px 10px; }
 .result { margin-top: 13px; padding: 13px; border-radius: 7px; background: #edf8f2; color: #18543d; }
 .result p { margin-top: 3px; font-size: .875rem; }
+.result .practice-actions { justify-content: flex-end; }
 .practice-note { margin: 12px 0 0; }
 
 dialog { width: min(450px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 22px; border: 1px solid var(--line); border-radius: 11px; background: white; color: var(--ink); box-shadow: 0 12px 48px #1a335b33; }
@@ -162,7 +187,7 @@ td:first-child { white-space: nowrap; }
   .sidebar { display: grid; gap: 12px; padding: 13px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
   .brand-icon { flex-basis: 34px; height: 34px; font-size: 1.4rem; }
   .brand strong { font-size: 1rem; }
-  .section-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .section-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .section-nav button { text-align: center; padding: 6px 4px; font-size: .875rem; }
   .random-summary, .course-summary { display: none; }
   .save-note { margin-top: 0; }
@@ -187,6 +212,11 @@ td:first-child { white-space: nowrap; }
   .stats small { font-size: .75rem; }
   .text-heading, .input-footer { flex-wrap: wrap; gap: 6px; }
   .input-footer .practice-actions { margin-left: auto; }
+  .result { flex-wrap: wrap; }
+  .result .practice-actions { margin-left: auto; }
+  .key-guide { padding-inline: 8px; }
+  .keymap { --key-size: min(34px, 6.15vw); }
+  .keymap kbd { font-size: .78rem; }
   .target { font-size: 1.35rem; }
   .large-text .target { font-size: 1.65rem; }
   dialog { padding: 14px; }

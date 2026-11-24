@@ -27,6 +27,14 @@
 - “练习记录”保留最近 100 次新完成的练习，可按类型筛选，查看用时、速度和准确率。旧版保留的完成进度和最近随机成绩仍会显示在侧栏。
 - “定位错误”可选中输入框里第一个不一致的字符。“大字模式”同时放大原文和输入文字，并记住字号设置。
 
+## 专项训练
+
+- **键位盲打**以实体 QWERTY 键盘为主。切到英文小写，从 F、J 定位、中排基准键练到上排、下排和混合字母键。屏幕提示下一键和所用手指，熟悉后可以关闭提示。键位训练单独统计字符速度，中文练习仍使用自己的输入法。
+- **错字复练**会从完成的中文练习中积累易错字词。词语练习收录目标词，句子练习收录目标字。每次选字或输入后只记录首次错位，避免把后续整串错位都记成独立错字。完成页可直接复练本次错字。复练中一次输入正确的字词会移出待练列表。
+- **每日挑战**按北京时间为每天生成固定的三句汉语练习，每句为 10–30 个汉字。可重复挑战，最佳成绩先比较准确率，再比较速度。完成天数和连续记录保存在当前浏览器。所有用户同日题目一致，适合分享成绩和互相比较。
+
+键位教学参考 [TypingClub 教学手册](https://static.typingclub.com/m/edclubdocs/media/pdf/Grade10_Typing_Handbook.pdf)及[联想社区的指法说明](https://club.lenovo.com.cn/thread-7943975-1-1.html)。[Emacs China 的指法讨论](https://emacs-china.org/t/topic/12132)涉及中文选字习惯和不同输入法的差异。针对错误复练参考 [Monkeytype 项目讨论](https://github.com/monkeytypegame/monkeytype/discussions/8262)中的考后复练设计。
+
 ## 统计说明
 
 速度 = 当前正确字符数 / 有效练习分钟数（最短按 1 秒计算，包含标点）；准确率 = 正确提交字符数 / 总提交字符数，修改不会清除先前错误，删除不计为新输入。候选拼音不计入字符统计。不同长度、模式和输入法下的成绩不宜直接比较。
@@ -35,13 +43,13 @@
 
 ## GitHub Pages 发布
 
-网站是纯静态页面。发布时将 `index.html`、`style.css`、`app.js`、`practice-data.js`、`course-data.js` 和 `.nojekyll` 放在项目仓库的 `main` 分支根目录，于 **Settings → Pages** 选择 **Deploy from a branch → main → /(root)**。`README.md` 可随源码提交。项目站使用 `https://<账号>.github.io/<仓库名>/`，页面资产均使用相对路径。
+网站是纯静态页面。将 `index.html`、`style.css`、`app.js`、`practice-data.js`、`course-data.js`、`training-data.js` 和 `.nojekyll` 推送到打字网站仓库的 `main` 分支根目录。GitHub Pages 使用 **Deploy from a branch → main → /(root)**。项目站使用 `https://<账号>.github.io/<仓库名>/`，页面资产均使用相对路径。
 
 网站使用系统字体，练习内容和功能由同站文件提供。访问 GitHub Pages 域名的网络可达性取决于访问者所在网络。线上站点与先前直接打开本地文件的练习进度各自保存在浏览器中。
 
 ## 开发与检查
 
-纯 HTML / CSS / JavaScript。`practice-data.js` 保存词库与抽取逻辑，`course-data.js` 保存课程和评分规则，`app.js` 管理交互。
+纯 HTML / CSS / JavaScript。`practice-data.js` 保存词库与抽取逻辑，`course-data.js` 保存课程和评分规则，`training-data.js` 保存键位材料、每日题目及复练规则，`app.js` 管理交互。
 
 `node --check app.js` 和 `node --check practice-data.js` 检查语法。
 
