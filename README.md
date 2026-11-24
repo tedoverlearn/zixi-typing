@@ -47,9 +47,15 @@
 
 记录使用当前浏览器的 localStorage；清理浏览器数据、更换浏览器或页面地址可能导致记录不可用。
 
+## 法条练习
+
+首批收录《中华人民共和国民法典》16 条和《中华人民共和国刑法》14 条。可按法律和条号选题，练完按所选法律的收录顺序切到下一条。条号在原文旁边单独显示，不计入输入目标。正文中的款、项及其编号按原文输入，不必输入段落换行。练习进度和成绩保存在当前浏览器。
+
+法条正文于 2026-11-24 核对。民法典底本为[最高人民法院转载全文](https://www.court.gov.cn/zixun/xiangqing/233181.html)，与[辽宁省审计厅转载全文](https://sjt.ln.gov.cn/sjt/sjzc/flfg/2026092410103250947/index.shtml)交叉比对。刑法底本为[国家税务总局政策法规库全文](https://fgk.chinatax.gov.cn/zcfgk/c100009/c5212248/content.html)，使用据《刑法修正案（十二）》修正的版本，与[国家统计局转载全文](https://www.stats.gov.cn/gk/tjfg/xgfxfg/202503/t20250311_1958931.html)交叉比对。界面上的主题标题仅用于选题定位。
+
 ## GitHub Pages 发布
 
-网站是纯静态页面。将 `index.html`、`style.css`、`app.js`、`practice-data.js`、`course-data.js`、`training-data.js`、`passage-data.js` 和 `.nojekyll` 推送到打字网站仓库的 `main` 分支根目录。GitHub Pages 使用 **Deploy from a branch → main → /(root)**。项目站使用 `https://<账号>.github.io/<仓库名>/`，页面资产均使用相对路径。
+网站是纯静态页面。将 `index.html`、`style.css`、`app.js`、`practice-data.js`、`course-data.js`、`training-data.js`、`passage-data.js`、`law-data.js` 和 `.nojekyll` 推送到打字网站仓库的 `main` 分支根目录。GitHub Pages 使用 **Deploy from a branch → main → /(root)**。项目站使用 `https://<账号>.github.io/<仓库名>/`，页面资产均使用相对路径。
 
 网站使用系统字体，练习内容和功能由同站文件提供。访问 GitHub Pages 域名的网络可达性取决于访问者所在网络。线上站点与先前直接打开本地文件的练习进度各自保存在浏览器中。
 

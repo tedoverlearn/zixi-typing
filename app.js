@@ -4,11 +4,13 @@
   const { units, lessons, rating, betterScore } = window.CourseData;
   const { keyRows, fingers, keyLessons, dayKey, validDay, dailyItems, challengeStreak, isReviewItem, rankedReview, updateReview } = window.TrainingData;
   const { parsePassage, maxLength, makeTrace, updateTrace, reportRows, recommendedSegment, materialId } = window.PassageData;
+  const { books, findArticle } = window.LawData;
   const $ = id => document.getElementById(id);
   const input = $('typing');
   const introKey = 'zixi-preview-progress-v1';
   const randomKey = 'zixi-random-progress-v1';
   const settingsKey = 'zixi-random-settings-v1';
+  const lawKey = 'zixi-law-position-v1';
   const sessionKey = 'zixi-practice-session-v1';
   function readStore(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
@@ -31,6 +33,8 @@
     };
   }
   let settings = readSettings(saved);
+  const savedLaw = readStore(lawKey, {});
+  let lawPosition = findArticle(savedLaw?.lawId, savedLaw?.lawArticle) || { book: books[0], article: books[0].articles[0] };
   let sessionData = readStore(sessionKey, {});
   if (!sessionData || typeof sessionData !== 'object' || Array.isArray(sessionData)) sessionData = {};
   let attemptId;
@@ -86,6 +90,40 @@
     $('keymap').append(line);
   }
   keyLessons.forEach((lesson, index) => $('key-stage').add(new Option(`${index + 1}. ${lesson.title}`, index)));
+  books.forEach(book => $('law-select').add(new Option(book.title, book.id)));
+
+  function renderLawSelection() {
+    const { book, article } = lawPosition;
+    $('law-select').value = book.id;
+    const completedArticles = sessionData.lawProgress || {};
+    const groups = new Map();
+    for (const entry of book.articles) {
+      if (!groups.has(entry.group)) {
+        const group = document.createElement('optgroup');
+        group.label = entry.group;
+        groups.set(entry.group, group);
+      }
+      const done = completedArticles[`${book.id}:${entry.number}`];
+      groups.get(entry.group).append(new Option(`第${entry.number}条 · ${entry.topic}${done ? ' ✓' : ''}`, entry.number));
+    }
+    $('law-article-select').replaceChildren(...groups.values());
+    $('law-article-select').value = article.number;
+    const count = book.articles.filter(entry => completedArticles[`${book.id}:${entry.number}`]).length;
+    $('law-progress').textContent = `已练 ${count} / ${book.articles.length} 条`;
+    $('law-source-link').href = book.source;
+    $('law-source-meta').textContent = `${book.version} · 核对于 ${book.checkedAt}`;
+  }
+
+  function renderLawNumber() {
+    const spec = section === 'law' ? exercise : exercise.focusSource;
+    const ref = findArticle(spec?.lawId, spec?.lawArticle);
+    $('target-layout').classList.toggle('law-target-layout', Boolean(ref));
+    $('law-number').hidden = !ref;
+    if (ref) {
+      $('law-number-book').textContent = ref.book.shortTitle;
+      $('law-number-text').textContent = ref.article.label;
+    }
+  }
 
   function renderTraining() {
     const keyboard = section === 'keyboard';
@@ -150,7 +188,8 @@
   }
 
   function describeExercise() {
-    return { section, selected, settings, items: exercise.items, keyStage, day: exercise.day, focusSource: exercise.focusSource };
+    return { section, selected, settings, items: exercise.items, keyStage, day: exercise.day, focusSource: exercise.focusSource,
+      lawId: exercise.lawId, lawArticle: exercise.lawArticle };
   }
 
   function saveDraft() {
@@ -172,28 +211,34 @@
     const random = section === 'random';
     const intro = section === 'intro';
     const studio = section === 'studio';
+    const law = section === 'law';
     const special = Object.hasOwn(trainingModes, section);
-    for (const [id, current] of [['random-tab', random], ['intro-tab', intro], ['training-tab', special], ['studio-tab', studio]]) {
+    for (const [id, current] of [['random-tab', random], ['intro-tab', intro], ['training-tab', special], ['studio-tab', studio], ['law-tab', law]]) {
       $(id).classList.toggle('nav-current', current);
       $(id).setAttribute('aria-pressed', String(current));
     }
-    $('section-name').textContent = random ? '随机练习' : intro ? '系统课程' : special ? '专项训练' : '文本训练';
+    $('section-name').textContent = random ? '随机练习' : intro ? '系统课程' : special ? '专项训练' : law ? '法条练习' : '文本训练';
     $('section-description').textContent = random ? '选一种练习，用自己的中文输入法跟打。'
       : intro ? '从字词到篇章，按顺序练习，也可以直接选你想练的课。'
-      : special ? '练准键位、复习易错字词，或完成今天的挑战。' : '用自己的材料练习，找出卡住的片段，复练后再打一遍原文。';
+      : special ? '练准键位、复习易错字词，或完成今天的挑战。'
+      : law ? '选一条基础法条跟打，熟悉条号和正文。' : '用自己的材料练习，找出卡住的片段，复练后再打一遍原文。';
     $('random-settings').hidden = !random;
     $('course-path').hidden = !intro;
     $('course-guidance').hidden = !intro;
     $('training-tools').hidden = !special;
     $('studio-tools').hidden = !studio;
+    $('law-tools').hidden = !law;
     $('key-guide').hidden = true;
     $('practice').hidden = !exercise.chars.length;
     $('practice').classList.toggle('key-practice', section === 'keyboard');
     $('practice').classList.toggle('studio-practice', studio);
     $('lessons').classList.toggle('course-lessons', intro);
+    $('lessons').hidden = studio || law;
     if (intro) renderCoursePath();
     if (special) renderTraining();
-    const options = studio ? [] : intro ? lessons.filter(lesson => lesson.unitIndex === lessons[selected].unitIndex)
+    if (law) renderLawSelection();
+    renderLawNumber();
+    const options = studio || law ? [] : intro ? lessons.filter(lesson => lesson.unitIndex === lessons[selected].unitIndex)
       : Object.entries(random ? modes : trainingModes).map(([id, mode]) => ({ ...mode, id }));
     $('lessons').replaceChildren(...options.map((option, i) => {
       const button = document.createElement('button');
@@ -318,6 +363,7 @@
     $('total-count').textContent = `/ ${exercise.chars.length} 字符`;
     $('restart').textContent = section === 'intro' ? '重新练习' : '重练本组';
     $('target-instruction').textContent = section === 'keyboard' ? '切换到英文输入，按顺序打小写字母和半角分号，无需空格'
+      : section === 'law' || exercise.focusSource?.section === 'law' ? '只输入正文和标点，无需输入条号或换行'
       : section === 'studio' ? '按顺序输入，保留句中的空格和标点，无需打换行'
       : exercise.grouped ? '按顺序输入，字词之间直接接着打' : '照着下面的文字输入，遇到标点也一起输入';
     $('input-help').textContent = section === 'keyboard' ? '建议使用实体键盘，敲下第一键开始计时。' : '开始组字时计时，选字后核对。';
@@ -393,6 +439,24 @@
     refreshStudioCount();
     resetPractice();
   }
+  function loadLaw(ref = lawPosition) {
+    section = 'law';
+    lawPosition = ref;
+    const { book, article } = ref;
+    const items = article.paragraphs;
+    const text = items.join('');
+    exercise = {
+      items, text, chars: Array.from(text), grouped: false, sentenceMode: true,
+      title: article.topic, caption: article.group, lawId: book.id, lawArticle: article.number
+    };
+    writeStore(lawKey, { lawId: book.id, lawArticle: article.number });
+    resetPractice();
+  }
+  function nextLawArticle() {
+    const { book, article } = lawPosition;
+    const next = book.articles[book.articles.indexOf(article) + 1];
+    return next ? { book, article: next } : null;
+  }
   function loadSavedExercise(config) {
     if (!config || !Array.isArray(config.items)) return false;
     const { items } = config;
@@ -416,6 +480,11 @@
     } else if (config.section === 'daily') {
       if (!validDay(config.day) || items.length !== 3 || new Set(items).size !== 3 || !items.every(item => sentences.includes(item))) return false;
       loadTraining('daily', { day: config.day, items });
+    } else if (config.section === 'law') {
+      const ref = findArticle(config.lawId, config.lawArticle);
+      const expected = ref?.article.paragraphs;
+      if (!expected || expected.length !== items.length || !items.every((item, i) => item === expected[i])) return false;
+      loadLaw(ref);
     } else if (config.section === 'studio') {
       const length = Array.from(items.join('')).length;
       if (!items.length || length > maxLength || !items.every(item => typeof item === 'string' && item.length)) return false;
@@ -448,6 +517,10 @@
   }
   function requestChange(action, restarting = false) {
     $('key-stage').value = keyStage;
+    if (section === 'law') {
+      $('law-select').value = lawPosition.book.id;
+      $('law-article-select').value = lawPosition.article.number;
+    }
     if (composing) { syncSettings(); $('input-help').textContent = '请先完成或取消输入法选字，再切换练习。'; return; }
     if (!active()) { action(); return; }
     pausePractice();
@@ -548,10 +621,12 @@
     $('pause').disabled = true;
     const score = { accuracy: accuracy(), speed: speed() };
     const lesson = section === 'intro' ? lessons[selected] : null;
+    const law = section === 'law' ? lawPosition : null;
     const stars = lesson ? rating(score, lesson) : 0;
     const entry = {
       id: attemptId, mode: section === 'random' ? settings.mode : section,
-      title: exercise.title, at: Date.now(), elapsed, ...score, stars
+      title: law ? `《${law.book.shortTitle}》${law.article.label} · ${exercise.title}` : exercise.title,
+      at: Date.now(), elapsed, ...score, stars
     };
     if (trace.length) entry.material = materialId(exercise.text);
     let isNew = false, newDailyBest = false, previousScore;
@@ -562,6 +637,7 @@
       const updated = { ...data, draft: data.draft?.id === attemptId ? null : data.draft };
       if (!isNew) return updated;
       updated.history = [entry, ...history].slice(0, 100);
+      if (law) updated.lawProgress = { ...data.lawProgress, [`${law.book.id}:${law.article.number}`]: true };
       if (missedItems.size || section === 'review') {
         updated.review = updateReview(data.review, missedItems, section === 'review' ? exercise.items : [], entry.at);
       }
@@ -606,7 +682,8 @@
       random: '练习下一组', intro: selected < lessons.length - 1 ? '下一节' : '再练一次',
       keyboard: keyStage < keyLessons.length - 1 ? '下一阶段' : '再练一次', review: '查看待复练',
       daily: exercise.day === dayKey() ? '再挑战一次' : '练今天的挑战',
-      studio: exercise.focusSource ? '回到原文重测' : '再打一遍原文'
+      studio: exercise.focusSource ? '回到原文重测' : '再打一遍原文',
+      law: nextLawArticle() ? '练下一条' : '再练本条'
     };
     $('next').textContent = nextLabels[section];
     renderNavigation(); renderText(); renderPassageReport();
@@ -660,6 +737,17 @@
       loadStudio();
       if (!exercise.items.length) $('studio-text').focus();
     });
+  });
+  $('law-tab').addEventListener('click', () => {
+    if (section !== 'law') requestChange(() => loadLaw());
+  });
+  $('law-select').addEventListener('change', () => {
+    const book = books.find(entry => entry.id === $('law-select').value);
+    if (book && book !== lawPosition.book) requestChange(() => loadLaw({ book, article: book.articles[0] }));
+  });
+  $('law-article-select').addEventListener('change', () => {
+    const ref = findArticle(lawPosition.book.id, Number($('law-article-select').value));
+    if (ref && ref.article !== lawPosition.article) requestChange(() => loadLaw(ref));
   });
   $('studio-edit').addEventListener('click', () => {
     $('studio-form').hidden = false;
@@ -720,6 +808,7 @@
     if (section === 'random') loadRandom();
     else if (section === 'intro') loadIntro(Math.min(selected + 1, lessons.length - 1));
     else if (section === 'keyboard') loadTraining('keyboard', { keyStage: Math.min(keyStage + 1, keyLessons.length - 1) });
+    else if (section === 'law') loadLaw(nextLawArticle() || lawPosition);
     else if (section === 'studio') {
       const source = exercise.focusSource;
       if (!source) resetPractice();
