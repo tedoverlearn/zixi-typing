@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>字习 · 中文打字练习</title>
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <aside class="sidebar">
@@ -30,6 +30,15 @@
       <h1 id="section-name">随机练习</h1>
       <p id="section-description">选一种练习，用自己的中文输入法跟打。</p>
     </header>
+
+    <section class="today-card" id="today-card" aria-labelledby="today-title" hidden>
+      <div>
+        <h2 id="today-title">今日训练</h2>
+        <p id="today-suggestion"></p>
+        <p id="today-reason"></p>
+      </div>
+      <button class="primary-button" id="today-start">开始今日训练</button>
+    </section>
 
     <section class="course-path" id="course-path" aria-label="课程路线" hidden>
       <div class="course-path-heading"><h2>课程路线</h2><button class="primary-button" id="continue-course">开始本课</button></div>
@@ -66,6 +75,7 @@
       </div>
       <div id="training-summary" hidden>
         <strong id="training-status"></strong><p id="training-detail"></p>
+        <ul id="review-status" class="review-status" aria-label="本组字词的巩固状态" hidden></ul>
         <button class="secondary-button" id="review-seed" hidden>先练一组常用词</button>
       </div>
     </section>
@@ -139,17 +149,32 @@
   <dialog class="history-dialog" id="history-dialog" aria-labelledby="history-title">
     <header class="history-heading"><div><h2 id="history-title">练习记录</h2><p>查看最近 100 次完成的练习。</p></div><form method="dialog"><button class="secondary-button" autofocus>关闭</button></form></header>
     <div class="history-today" id="history-today"></div>
-    <label class="history-filter">练习类型<select id="history-filter"><option value="all">全部练习</option><option value="words">常用词语</option><option value="characters">常用单字</option><option value="sentences">汉语句子</option><option value="intro">系统课程</option><option value="keyboard">键位盲打</option><option value="review">错字复练</option><option value="daily">每日挑战</option><option value="studio">文本训练</option><option value="law">法条练习</option></select></label>
+    <div class="history-preference">
+      <label class="history-filter">当前输入法<select id="ime-setting" aria-describedby="ime-help"></select></label>
+      <p id="ime-help">完成练习时记录这里选中的输入法。</p>
+    </div>
+    <div class="history-filters">
+      <label class="history-filter">练习类型<select id="history-filter"><option value="all">全部练习</option><option value="words">常用词语</option><option value="characters">常用单字</option><option value="sentences">汉语句子</option><option value="intro">系统课程</option><option value="keyboard">键位盲打</option><option value="review">错字复练</option><option value="daily">每日挑战</option><option value="studio">文本训练</option><option value="law">法条练习</option></select></label>
+      <label class="history-filter">筛选输入法<select id="history-ime-filter"></select></label>
+    </div>
+    <section class="history-trend" aria-labelledby="trend-heading">
+      <h3 id="trend-heading">同口径趋势</h3>
+      <p id="trend-context" role="status"></p>
+      <div class="trend-charts" id="trend-charts" hidden>
+        <figure><figcaption>速度 <strong id="trend-speed-latest"></strong></figcaption><svg id="trend-speed" viewBox="0 0 288 74" aria-label="最近练习速度折线" role="img"></svg><small id="trend-speed-range"></small></figure>
+        <figure><figcaption>准确率 <strong id="trend-accuracy-latest"></strong></figcaption><svg id="trend-accuracy" viewBox="0 0 288 74" aria-label="最近练习准确率折线" role="img"></svg><small>0–100%</small></figure>
+      </div>
+    </section>
     <p id="history-empty" hidden></p>
     <div class="history-table-wrap" id="history-table-wrap" tabindex="0" role="region" aria-label="成绩表">
-      <table><thead><tr><th scope="col">完成时间</th><th scope="col">练习</th><th scope="col">用时</th><th scope="col">速度</th><th scope="col">准确率</th></tr></thead><tbody id="history-rows"></tbody></table>
+      <table><thead><tr><th scope="col">完成时间</th><th scope="col">练习</th><th scope="col">输入法</th><th scope="col">用时</th><th scope="col">速度</th><th scope="col">准确率</th></tr></thead><tbody id="history-rows"></tbody></table>
     </div>
   </dialog>
   <script src="practice-data.js"></script>
   <script src="course-data.js"></script>
-  <script src="training-data.js"></script>
+  <script src="training-data.js?v=2"></script>
   <script src="passage-data.js"></script>
   <script src="law-data.js?v=2"></script>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

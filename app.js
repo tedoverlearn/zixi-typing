@@ -12,6 +12,12 @@
   const settingsKey = 'zixi-random-settings-v1';
   const lawKey = 'zixi-law-position-v1';
   const sessionKey = 'zixi-practice-session-v1';
+  const imeKey = 'zixi-ime-preference-v1';
+  const imeLabels = {
+    unset: '未设置', 'sogou-full': '搜狗全拼', 'qq-full': 'QQ全拼', 'google-ms-double': '谷歌双拼（微软双拼方案）',
+    'sogou-wubi86': '搜狗五笔（86版）', 'jp-wubi86': '极品五笔（86版）', other: '其他'
+  };
+  const imeOf = entry => Object.hasOwn(imeLabels, entry?.ime) ? entry.ime : 'untagged';
   function readStore(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
     catch { $('save-note').textContent = '浏览器存储不可用，本次仍可练习。'; return fallback; }
@@ -21,6 +27,8 @@
     catch { $('save-note').textContent = '本次仍可练习，但浏览器未能保存记录。'; }
   }
   let records = readStore(introKey, {});
+  let selectedIme = imeOf({ ime: readStore(imeKey, 'unset') });
+  if (selectedIme === 'untagged') selectedIme = 'unset';
   if (!records || typeof records !== 'object' || Array.isArray(records)) records = {};
   let randomRecord = readStore(randomKey, {});
   if (!randomRecord || !Number.isSafeInteger(randomRecord.count) || randomRecord.count < 0) randomRecord = { count: 0 };
@@ -40,10 +48,12 @@
   let attemptId;
   let section = 'random', selected = 0, exercise, targetChars = [];
   let keyStage = 0, lastTraining = 'keyboard', missedItems = new Set();
+  let reviewErrors = new Set();
   let trace = [], studioItems = [];
   let keyHints = readStore('zixi-key-hints-v1', true) !== false;
   let previous = '', composing = false, completed = false, paused = false, pauseRequested = false;
   let startedAt = null, elapsed = 0, attempts = 0, hits = 0, pendingAction = null;
+  let todayInPractice = false;
   const duration = () => elapsed + (startedAt === null ? 0 : performance.now() - startedAt);
   const accuracy = () => attempts ? Math.round(hits / attempts * 100) : 0;
   const correctCount = () => Array.from(previous).filter((char, i) => char === exercise.chars[i]).length;
@@ -91,6 +101,13 @@
   }
   keyLessons.forEach((lesson, index) => $('key-stage').add(new Option(`${index + 1}. ${lesson.title}`, index)));
   books.forEach(book => $('law-select').add(new Option(book.title, book.id)));
+  $('history-ime-filter').add(new Option('全部输入法', 'all'));
+  for (const [id, label] of Object.entries(imeLabels)) {
+    $('ime-setting').add(new Option(label, id));
+    $('history-ime-filter').add(new Option(label, id));
+  }
+  $('history-ime-filter').add(new Option('未标记', 'untagged'));
+  $('ime-setting').value = selectedIme;
 
   function renderLawSelection() {
     const { book, article } = lawPosition;
@@ -134,16 +151,30 @@
     $('key-guide').hidden = !keyboard || !keyHints;
     $('training-summary').hidden = false;
     $('review-seed').hidden = true;
+    $('review-status').hidden = true;
     if (keyboard) {
       $('training-status').textContent = `QWERTY 键位 · 第 ${keyStage + 1} / ${keyLessons.length} 阶段`;
       $('training-detail').textContent = keyLessons[keyStage].tip;
     } else if (review) {
-      const count = rankedReview(sessionData.review).length;
+      const queue = rankedReview(sessionData.review);
+      const consolidating = queue.filter(([, record]) => record.correctRounds === 1).length;
       const empty = !exercise.items.length;
-      $('training-status').textContent = count ? `待复练 ${count} 项` : '错字本暂无待复练字词';
+      $('training-status').textContent = queue.length ? `待复习 ${queue.length - consolidating} 项 · 待巩固 ${consolidating} 项` : '错字本暂无待复练字词';
       $('training-detail').textContent = empty ? '完成一次中文练习后，输错过的字词会记在这里。'
-        : '优先练出错较多的字词。在这里一次打对的字词会移出待复练列表。';
+        : '在两轮完成的复练中分别一次打对，才算巩固。再次打错会回到待复习。';
       $('review-seed').hidden = !empty;
+      const statuses = new Map(queue);
+      const items = exercise.items.filter(item => statuses.has(item));
+      $('review-status').hidden = !items.length;
+      $('review-status').replaceChildren(...items.map(item => {
+        const row = document.createElement('li');
+        const word = document.createElement('strong');
+        word.textContent = item;
+        const status = document.createElement('small');
+        status.textContent = statuses.get(item).correctRounds === 1 ? '再对 1 次完成巩固' : '待复习';
+        row.append(word, status);
+        return row;
+      }));
     } else {
       const scores = sessionData.dailyScores || {};
       const best = scores[exercise.day];
@@ -196,15 +227,52 @@
     if (!active()) return;
     const draft = {
       ...describeExercise(), id: attemptId, text: previous, elapsed: duration(), attempts, hits, misses: [...missedItems],
+      reviewErrors: [...reviewErrors],
       trace: trace.map(({ at, uncertain, errors }) => ({ at, uncertain, errors }))
     };
-    updateSession(data => ({ ...data, draft }));
+    let reset = false;
+    updateSession(data => {
+      const errors = section === 'review' ? reviewErrors : missedItems;
+      const expired = [...errors].filter(item => data.review?.[item]?.correctRounds === 1);
+      if (!expired.length) return { ...data, draft };
+      const review = { ...data.review };
+      for (const item of expired) review[item] = { ...review[item], correctRounds: 0 };
+      reset = true;
+      return { ...data, draft, review };
+    });
+    if (reset && section === 'review') renderTraining();
   }
 
   function discardDraft() {
     if (attemptId && active()) {
       updateSession(data => data.draft?.id === attemptId ? { ...data, draft: null } : data);
     }
+  }
+
+  function todayRecommendation() {
+    if (active()) {
+      return { title: '继续上次练习', reason: `「${exercise.title}」尚未完成，可以从当前进度继续。`, start: () => {
+        if (paused) $('pause').click(); else input.focus();
+      } };
+    }
+    const queueSize = rankedReview(sessionData.review).length;
+    if (queueSize) {
+      return { title: '错字复练', reason: `错字本还有 ${queueSize} 项待练，先复习容易输错的字词。`, start: () => loadTraining('review') };
+    }
+    const lesson = recommendedLesson();
+    if (lesson) {
+      return { title: `系统课程 · ${lesson.title}`, reason: `第 ${lesson.index + 1} 节尚未完成，适合接着课程顺序练。`, start: () => loadIntro(lesson.index) };
+    }
+    return { title: '法条练习', reason: '系统课程已全部完成，可以练习一条法条来巩固。', start: () => loadLaw() };
+  }
+
+  function renderToday() {
+    const card = $('today-card');
+    card.hidden = section !== 'random' && !todayInPractice;
+    if (card.hidden) return;
+    const recommendation = todayRecommendation();
+    $('today-suggestion').textContent = recommendation.title;
+    $('today-reason').textContent = recommendation.reason;
   }
 
   function renderNavigation() {
@@ -267,6 +335,7 @@
     const last = randomRecord.last;
     if (last && Number.isFinite(last.speed) && Number.isFinite(last.accuracy)) $('last-score').textContent = `最近一组：${last.speed} 字/分钟，准确率 ${last.accuracy}%。`;
     if (random) syncSettings();
+    renderToday();
   }
   function syncSettings() {
     $('level').value = settings.level;
@@ -331,7 +400,10 @@
     renderStats();
   }
   function startClock() {
-    if (startedAt === null && !paused && !completed && !pauseRequested) startedAt = performance.now();
+    if (startedAt === null && !paused && !completed && !pauseRequested) {
+      startedAt = performance.now();
+      renderToday();
+    }
     $('pause').disabled = completed;
   }
   function stopClock() { elapsed = duration(); startedAt = null; }
@@ -345,12 +417,14 @@
     $('locate-error').disabled = true;
     saveDraft();
     renderStats();
+    renderToday();
   }
   function resetPractice() {
     attemptId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     previous = ''; composing = completed = paused = pauseRequested = false;
     startedAt = null; elapsed = attempts = hits = 0;
     missedItems = new Set();
+    reviewErrors = new Set();
     trace = (!exercise.focusSource && exercise.sentenceMode) ? makeTrace(exercise.items) : [];
     input.value = ''; input.readOnly = false;
     input.lang = section === 'keyboard' ? 'en' : 'zh-CN';
@@ -511,6 +585,7 @@
       }
     }
     missedItems = new Set(Array.isArray(draft.misses) ? draft.misses.filter(isReviewItem).slice(0, 80) : []);
+    reviewErrors = new Set(Array.isArray(draft.reviewErrors) ? draft.reviewErrors.filter(isReviewItem) : missedItems);
     pausePractice('已恢复上次练习，点击“继续练习”开始计时。');
     renderText();
     return true;
@@ -546,6 +621,18 @@
       }
     }
   }
+
+  function markReviewErrors(next, editStart, editEnd) {
+    if (section !== 'review') return;
+    let start = 0;
+    for (const item of exercise.items) {
+      const end = start + Array.from(item).length;
+      for (let i = Math.max(start, editStart); i < Math.min(end, editEnd); i++) {
+        if (next[i] !== exercise.chars[i]) { reviewErrors.add(item); break; }
+      }
+      start = end;
+    }
+  }
   function commitInput() {
     if (composing || completed || paused) return;
     const next = Array.from(input.value);
@@ -561,6 +648,7 @@
     previous = next.join('');
     const wrong = firstError();
     collectMiss(next, wrong, prefix, editEnd);
+    markReviewErrors(next, prefix, editEnd);
     if (trace.length) {
       let matched = wrong < 0 ? next.length : wrong;
       if (matched === exercise.chars.length && next.length > matched) matched--;
@@ -623,10 +711,11 @@
     const lesson = section === 'intro' ? lessons[selected] : null;
     const law = section === 'law' ? lawPosition : null;
     const stars = lesson ? rating(score, lesson) : 0;
+    const recordedIme = readStore(imeKey, selectedIme);
     const entry = {
       id: attemptId, mode: section === 'random' ? settings.mode : section,
       title: law ? `《${law.book.shortTitle}》${law.article.label} · ${exercise.title}` : exercise.title,
-      at: Date.now(), elapsed, ...score, stars
+      at: Date.now(), elapsed, ...score, stars, ime: Object.hasOwn(imeLabels, recordedIme) ? recordedIme : selectedIme
     };
     if (trace.length) entry.material = materialId(exercise.text);
     let isNew = false, newDailyBest = false, previousScore;
@@ -639,7 +728,7 @@
       updated.history = [entry, ...history].slice(0, 100);
       if (law) updated.lawProgress = { ...data.lawProgress, [`${law.book.id}:${law.article.number}`]: true };
       if (missedItems.size || section === 'review') {
-        updated.review = updateReview(data.review, missedItems, section === 'review' ? exercise.items : [], entry.at);
+        updated.review = updateReview(data.review, missedItems, section === 'review' ? exercise.items : [], entry.at, reviewErrors);
       }
       if (section === 'daily') {
         const best = data.dailyScores?.[exercise.day];
@@ -674,8 +763,9 @@
     } else if (section === 'keyboard') {
       $('result-advice').textContent = score.accuracy >= 95 ? '准确率已达 95%。可以继续，或关闭键位提示重练。' : '试着慢一点，先把本阶段练到 95% 准确率。';
     } else if (section === 'review') {
-      const corrected = exercise.items.length - missedItems.size;
-      $('result-advice').textContent = `本组一次打对 ${corrected} 项。再次打错的字词会留在错字本。`;
+      const clean = exercise.items.filter(item => !reviewErrors.has(item) && !missedItems.has(item));
+      const cleared = clean.filter(item => !sessionData.review?.[item]).length;
+      $('result-advice').textContent = `本组已巩固 ${cleared} 项，待巩固 ${clean.length - cleared} 项，待复习 ${exercise.items.length - clean.length} 项。`;
     }
     $('input-help').textContent = '速度按正确字符计算，含标点。准确率计入改正前的错误。';
     const nextLabels = {
@@ -689,6 +779,55 @@
     renderNavigation(); renderText(); renderPassageReport();
   }
   const historyDate = new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const historySpeedUnit = mode => ['keyboard', 'studio'].includes(mode) ? '字符/分钟' : '字/分钟';
+  function drawTrend(svg, values, max, unit) {
+    const node = (name, attributes) => {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+      for (const [key, value] of Object.entries(attributes)) el.setAttribute(key, value);
+      return el;
+    };
+    const points = values.map((value, i) => [7 + 274 * i / (values.length - 1), 65 - 56 * value / max]);
+    const floor = node('line', { x1: 7, x2: 281, y1: 65, y2: 65 });
+    const line = node('polyline', { points: points.map(point => point.join(',')).join(' ') });
+    svg.replaceChildren(floor, line, ...points.map(([cx, cy], i) => {
+      const circle = node('circle', { cx, cy, r: 3 });
+      const title = node('title', {});
+      title.textContent = `第 ${i + 1} 次 · ${values[i]}${unit}`;
+      circle.append(title);
+      return circle;
+    }));
+  }
+  function renderHistoryTrend(shown) {
+    const valid = shown.filter(item => Number.isFinite(item.speed) && item.speed >= 0
+      && Number.isFinite(item.accuracy) && item.accuracy >= 0 && item.accuracy <= 100
+      && !['unset', 'untagged', 'other'].includes(imeOf(item)));
+    const latest = valid[0];
+    const cohort = latest ? valid.filter(item => item.mode === latest.mode && item.ime === latest.ime).slice(0, 10).reverse() : [];
+    $('trend-charts').hidden = cohort.length < 2;
+    if (cohort.length < 2) {
+      $('trend-speed').replaceChildren();
+      $('trend-accuracy').replaceChildren();
+    }
+    if (!latest) {
+      $('trend-context').textContent = '数据不足。使用同一种具名输入法完成两次同类练习后，会显示趋势。';
+      return;
+    }
+    const type = [...$('history-filter').options].find(option => option.value === latest.mode)?.textContent || latest.mode;
+    const context = `${type} · ${imeLabels[latest.ime]}`;
+    if (cohort.length < 2) {
+      $('trend-context').textContent = `${context} · 数据不足（只有 1 次记录）。`;
+      return;
+    }
+    const unit = historySpeedUnit(latest.mode);
+    const speeds = cohort.map(item => item.speed);
+    const maxSpeed = Math.max(10, Math.ceil(Math.max(...speeds) / 10) * 10);
+    $('trend-context').textContent = `${context} · 最近 ${cohort.length} 次，右侧为最近一次。`;
+    $('trend-speed-latest').textContent = `${latest.speed} ${unit}`;
+    $('trend-accuracy-latest').textContent = `${latest.accuracy}%`;
+    $('trend-speed-range').textContent = `0–${maxSpeed} ${unit}`;
+    drawTrend($('trend-speed'), speeds, maxSpeed, ` ${unit}`);
+    drawTrend($('trend-accuracy'), cohort.map(item => item.accuracy), 100, '%');
+  }
   function renderHistory() {
     const entries = readStore(sessionKey, sessionData)?.history;
     const history = Array.isArray(entries) ? entries.filter(item => item && Number.isFinite(item.at) && item.at > 0 && item.at <= 8.64e15) : [];
@@ -697,15 +836,18 @@
     const todayTime = todayEntries.reduce((sum, item) => sum + item.elapsed, 0);
     $('history-today').textContent = `今日记录 ${todayEntries.length} 次 · 累计练习 ${durationLabel(todayTime)}`;
     const filter = $('history-filter').value;
-    const shown = filter === 'all' ? history : history.filter(item => item.mode === filter);
+    const imeFilter = $('history-ime-filter').value;
+    const shown = history.filter(item => (filter === 'all' || item.mode === filter) && (imeFilter === 'all' || imeOf(item) === imeFilter));
+    renderHistoryTrend(shown);
     $('history-empty').hidden = shown.length > 0;
-    $('history-empty').textContent = filter === 'all' ? '完成一次练习后，成绩会出现在这里。' : '这个类型还没有成绩。';
+    $('history-empty').textContent = filter === 'all' && imeFilter === 'all' ? '完成一次练习后，成绩会出现在这里。' : '没有符合当前筛选条件的练习记录。';
     $('history-table-wrap').hidden = !shown.length;
     $('history-rows').replaceChildren(...shown.map(item => {
       const row = document.createElement('tr');
       const title = item.stars ? `${item.title} · ${item.stars} 星` : item.title;
-      const pace = `${item.speed} ${['keyboard', 'studio'].includes(item.mode) ? '字符/分钟' : '字/分钟'}`;
-      for (const value of [historyDate.format(item.at), title, durationLabel(item.elapsed), pace, `${item.accuracy}%`]) {
+      const pace = `${item.speed} ${historySpeedUnit(item.mode)}`;
+      const ime = imeLabels[imeOf(item)] || '未标记';
+      for (const value of [historyDate.format(item.at), title, ime, durationLabel(item.elapsed), pace, `${item.accuracy}%`]) {
         row.insertCell().textContent = value;
       }
       return row;
@@ -725,6 +867,11 @@
     e.preventDefault(); $('input-help').textContent = '请亲手输入练习文字，暂不支持粘贴。';
   });
   $('random-tab').addEventListener('click', () => { if (section !== 'random') requestChange(() => loadRandom()); });
+  $('today-start').addEventListener('click', () => {
+    todayInPractice = true;
+    todayRecommendation().start();
+    input.focus();
+  });
   $('intro-tab').addEventListener('click', () => {
     if (section !== 'intro') requestChange(() => loadIntro(recommendedLesson()?.index ?? 0));
   });
@@ -860,10 +1007,19 @@
     $('history-dialog').showModal();
   });
   $('history-filter').addEventListener('change', renderHistory);
+  $('history-ime-filter').addEventListener('change', renderHistory);
+  $('ime-setting').addEventListener('change', () => {
+    selectedIme = $('ime-setting').value;
+    writeStore(imeKey, selectedIme);
+  });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pausePractice('已自动暂停，回来后点击“继续练习”。'); });
   window.addEventListener('blur', () => pausePractice('已自动暂停，回来后点击“继续练习”。'));
   window.addEventListener('pagehide', saveDraft);
   setInterval(() => { if (startedAt !== null) renderStats(); }, 500);
   setTextSize(readStore('zixi-large-text-v1', false) === true);
-  if (!restoreDraft(sessionData.draft)) loadRandom();
+  todayInPractice = Boolean(sessionData.draft);
+  if (!restoreDraft(sessionData.draft)) {
+    todayInPractice = false;
+    loadRandom();
+  }
 })();

@@ -61,13 +61,17 @@
       .sort((a, b) => b[1].count - a[1].count || b[1].at - a[1].at);
   }
 
-  function updateReview(queue, misses, practicedItems, now) {
+  function updateReview(queue, misses, practicedItems, now, reviewErrors = misses) {
     const next = { ...queue };
-    for (const item of practicedItems) {
-      if (!misses.has(item)) delete next[item];
+    for (const item of new Set(practicedItems)) {
+      const record = next[item];
+      if (!record || misses.has(item)) continue;
+      if (reviewErrors.has(item)) next[item] = { ...record, correctRounds: 0 };
+      else if (record.correctRounds === 1) delete next[item];
+      else next[item] = { ...record, correctRounds: 1 };
     }
     for (const item of misses) {
-      next[item] = { count: (Number.isFinite(next[item]?.count) ? next[item].count : 0) + 1, at: now };
+      next[item] = { ...next[item], count: (Number.isFinite(next[item]?.count) ? next[item].count : 0) + 1, at: now, correctRounds: 0 };
     }
     return Object.fromEntries(rankedReview(next).slice(0, 80));
   }
