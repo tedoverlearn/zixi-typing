@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>字习 · 中文打字练习</title>
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <aside class="sidebar">
@@ -13,6 +13,7 @@
       <button id="random-tab" class="nav-current" aria-pressed="true">随机练习</button>
       <button id="intro-tab" aria-pressed="false">系统课程</button>
       <button id="training-tab" aria-pressed="false">专项训练</button>
+      <button id="studio-tab" aria-pressed="false">文本训练</button>
       <button id="history-open" aria-haspopup="dialog">练习记录</button>
     </nav>
     <div class="random-summary"><span>累计随机练习</span><strong id="random-count">0 <small>组</small></strong><p id="last-score">完成一组后，这里会显示最近成绩。</p></div>
@@ -33,6 +34,19 @@
       <div class="course-path-heading"><h2>课程路线</h2><button class="primary-button" id="continue-course">开始本课</button></div>
       <nav class="unit-list" id="units" aria-label="课程单元"></nav>
       <p id="unit-description" class="unit-description"></p>
+    </section>
+
+    <section class="studio-tools" id="studio-tools" aria-label="文本训练设置" hidden>
+      <div class="studio-source" id="studio-source" hidden>
+        <p id="studio-summary"></p><button class="secondary-button" id="studio-edit">更换原文</button>
+      </div>
+      <form id="studio-form">
+        <label for="studio-text">练习原文</label>
+        <p id="studio-help">粘贴 10–600 个字符。换行用于分段，句中的空格和标点照原文输入。</p>
+        <textarea id="studio-text" rows="5" maxlength="2400" autocomplete="off" spellcheck="false" aria-describedby="studio-help studio-count" placeholder="例如：一段文章、工作邮件，或需要反复练习的日常用语。"></textarea>
+        <div class="studio-actions"><span id="studio-count">0 / 600 字符</span><button class="secondary-button" id="studio-cancel" type="button" hidden>收起</button><button class="primary-button" type="submit">用这段文字练习</button></div>
+        <p id="studio-error" role="alert" hidden></p>
+      </form>
     </section>
     <nav class="lessons" aria-label="选择练习内容" id="lessons"></nav>
 
@@ -91,9 +105,15 @@
           <div class="practice-actions"><button class="secondary-button" id="locate-error" hidden>定位错误</button><button class="secondary-button" id="pause" disabled>暂停练习</button></div>
         </div>
         <div class="result" id="result" hidden aria-live="polite">
-          <div><strong id="result-title"></strong><p id="result-detail"></p><p id="result-advice" hidden></p></div>
-          <div class="practice-actions"><button class="secondary-button" id="review-misses" hidden>复练本次错字</button><button class="primary-button" id="next">下一节</button></div>
+          <div><strong id="result-title"></strong><p id="result-detail"></p><p id="result-advice" hidden></p><p id="result-comparison" hidden></p></div>
+          <div class="practice-actions"><button class="secondary-button" id="report-open" hidden>查看分段回顾</button><button class="secondary-button" id="review-misses" hidden>复练本次错字</button><button class="primary-button" id="next">下一节</button></div>
         </div>
+        <section id="passage-report" class="passage-report" aria-labelledby="passage-report-title" hidden>
+          <h3 id="passage-report-title" tabindex="-1">分段回顾</h3>
+          <p id="report-overview"></p>
+          <ol id="report-segments"></ol>
+          <p class="report-note">耗时从输入开始计算，暂停时间已扣除。跨段组字时，相关片段的耗时不单独估算。</p>
+        </section>
       </div>
       <progress class="bottom-progress" id="progress-fill" aria-label="正确输入进度" value="0" max="1"></progress>
     </section>
@@ -107,7 +127,7 @@
   <dialog class="history-dialog" id="history-dialog" aria-labelledby="history-title">
     <header class="history-heading"><div><h2 id="history-title">练习记录</h2><p>查看最近 100 次完成的练习。</p></div><form method="dialog"><button class="secondary-button" autofocus>关闭</button></form></header>
     <div class="history-today" id="history-today"></div>
-    <label class="history-filter">练习类型<select id="history-filter"><option value="all">全部练习</option><option value="words">常用词语</option><option value="characters">常用单字</option><option value="sentences">汉语句子</option><option value="intro">系统课程</option><option value="keyboard">键位盲打</option><option value="review">错字复练</option><option value="daily">每日挑战</option></select></label>
+    <label class="history-filter">练习类型<select id="history-filter"><option value="all">全部练习</option><option value="words">常用词语</option><option value="characters">常用单字</option><option value="sentences">汉语句子</option><option value="intro">系统课程</option><option value="keyboard">键位盲打</option><option value="review">错字复练</option><option value="daily">每日挑战</option><option value="studio">文本训练</option></select></label>
     <p id="history-empty" hidden></p>
     <div class="history-table-wrap" id="history-table-wrap" tabindex="0" role="region" aria-label="成绩表">
       <table><thead><tr><th scope="col">完成时间</th><th scope="col">练习</th><th scope="col">用时</th><th scope="col">速度</th><th scope="col">准确率</th></tr></thead><tbody id="history-rows"></tbody></table>
@@ -116,6 +136,7 @@
   <script src="practice-data.js"></script>
   <script src="course-data.js"></script>
   <script src="training-data.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="passage-data.js"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

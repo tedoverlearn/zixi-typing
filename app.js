@@ -3,6 +3,7 @@
   const { levels, modes, characters, sentences, generate } = window.PracticeData;
   const { units, lessons, rating, betterScore } = window.CourseData;
   const { keyRows, fingers, keyLessons, dayKey, validDay, dailyItems, challengeStreak, isReviewItem, rankedReview, updateReview } = window.TrainingData;
+  const { parsePassage, maxLength, makeTrace, updateTrace, reportRows, recommendedSegment, materialId } = window.PassageData;
   const $ = id => document.getElementById(id);
   const input = $('typing');
   const introKey = 'zixi-preview-progress-v1';
@@ -35,6 +36,7 @@
   let attemptId;
   let section = 'random', selected = 0, exercise, targetChars = [];
   let keyStage = 0, lastTraining = 'keyboard', missedItems = new Set();
+  let trace = [], studioItems = [];
   let keyHints = readStore('zixi-key-hints-v1', true) !== false;
   let previous = '', composing = false, completed = false, paused = false, pauseRequested = false;
   let startedAt = null, elapsed = 0, attempts = 0, hits = 0, pendingAction = null;
@@ -55,7 +57,7 @@
     review: { title: '错字复练', subtitle: '集中复习易错字词', icon: '错' },
     daily: { title: '每日挑战', subtitle: '每天三句固定题', icon: '日' }
   };
-  const speedUnit = () => section === 'keyboard' ? '字符/分钟' : '字/分钟';
+  const speedUnit = () => ['keyboard', 'studio'].includes(section) ? '字符/分钟' : '字/分钟';
   const buttonContent = (button, icon, title, detail) => {
     const marker = document.createElement('span');
     marker.className = 'lesson-index';
@@ -147,11 +149,15 @@
     writeStore(sessionKey, sessionData);
   }
 
+  function describeExercise() {
+    return { section, selected, settings, items: exercise.items, keyStage, day: exercise.day, focusSource: exercise.focusSource };
+  }
+
   function saveDraft() {
     if (!active()) return;
     const draft = {
-      id: attemptId, section, selected, settings, items: exercise.items,
-      text: previous, elapsed: duration(), attempts, hits, keyStage, day: exercise.day, misses: [...missedItems]
+      ...describeExercise(), id: attemptId, text: previous, elapsed: duration(), attempts, hits, misses: [...missedItems],
+      trace: trace.map(({ at, uncertain, errors }) => ({ at, uncertain, errors }))
     };
     updateSession(data => ({ ...data, draft }));
   }
@@ -165,25 +171,29 @@
   function renderNavigation() {
     const random = section === 'random';
     const intro = section === 'intro';
-    const special = !random && !intro;
-    for (const [id, current] of [['random-tab', random], ['intro-tab', intro], ['training-tab', special]]) {
+    const studio = section === 'studio';
+    const special = Object.hasOwn(trainingModes, section);
+    for (const [id, current] of [['random-tab', random], ['intro-tab', intro], ['training-tab', special], ['studio-tab', studio]]) {
       $(id).classList.toggle('nav-current', current);
       $(id).setAttribute('aria-pressed', String(current));
     }
-    $('section-name').textContent = random ? '随机练习' : intro ? '系统课程' : '专项训练';
+    $('section-name').textContent = random ? '随机练习' : intro ? '系统课程' : special ? '专项训练' : '文本训练';
     $('section-description').textContent = random ? '选一种练习，用自己的中文输入法跟打。'
-      : intro ? '从字词到篇章，按顺序练习，也可以直接选你想练的课。' : '练准键位、复习易错字词，或完成今天的挑战。';
+      : intro ? '从字词到篇章，按顺序练习，也可以直接选你想练的课。'
+      : special ? '练准键位、复习易错字词，或完成今天的挑战。' : '用自己的材料练习，找出卡住的片段，复练后再打一遍原文。';
     $('random-settings').hidden = !random;
     $('course-path').hidden = !intro;
     $('course-guidance').hidden = !intro;
     $('training-tools').hidden = !special;
+    $('studio-tools').hidden = !studio;
     $('key-guide').hidden = true;
     $('practice').hidden = !exercise.chars.length;
     $('practice').classList.toggle('key-practice', section === 'keyboard');
+    $('practice').classList.toggle('studio-practice', studio);
     $('lessons').classList.toggle('course-lessons', intro);
     if (intro) renderCoursePath();
     if (special) renderTraining();
-    const options = intro ? lessons.filter(lesson => lesson.unitIndex === lessons[selected].unitIndex)
+    const options = studio ? [] : intro ? lessons.filter(lesson => lesson.unitIndex === lessons[selected].unitIndex)
       : Object.entries(random ? modes : trainingModes).map(([id, mode]) => ({ ...mode, id }));
     $('lessons').replaceChildren(...options.map((option, i) => {
       const button = document.createElement('button');
@@ -296,16 +306,19 @@
     previous = ''; composing = completed = paused = pauseRequested = false;
     startedAt = null; elapsed = attempts = hits = 0;
     missedItems = new Set();
+    trace = (!exercise.focusSource && exercise.sentenceMode) ? makeTrace(exercise.items) : [];
     input.value = ''; input.readOnly = false;
     input.lang = section === 'keyboard' ? 'en' : 'zh-CN';
     $('target').scrollTop = 0;
     $('result').hidden = true;
+    $('passage-report').hidden = true;
     $('pause').textContent = '暂停练习'; $('pause').disabled = true;
     $('lesson-number').textContent = exercise.caption;
     $('lesson-title').textContent = exercise.title;
     $('total-count').textContent = `/ ${exercise.chars.length} 字符`;
     $('restart').textContent = section === 'intro' ? '重新练习' : '重练本组';
     $('target-instruction').textContent = section === 'keyboard' ? '切换到英文输入，按顺序打小写字母和半角分号，无需空格'
+      : section === 'studio' ? '按顺序输入，保留句中的空格和标点，无需打换行'
       : exercise.grouped ? '按顺序输入，字词之间直接接着打' : '照着下面的文字输入，遇到标点也一起输入';
     $('input-help').textContent = section === 'keyboard' ? '建议使用实体键盘，敲下第一键开始计时。' : '开始组字时计时，选字后核对。';
     renderNavigation(); renderExercise(); renderText();
@@ -328,7 +341,7 @@
     section = 'intro'; selected = index;
     const lesson = lessons[index];
     exercise = {
-      ...lesson, chars: Array.from(lesson.text), grouped: Boolean(lesson.words), sentenceMode: lesson.items.length > 1,
+      ...lesson, chars: Array.from(lesson.text), grouped: Boolean(lesson.words), sentenceMode: !lesson.words && /[。！？]/u.test(lesson.text),
       caption: `${units[lesson.unitIndex].title} / 第 ${index + 1} 节，共 ${lessons.length} 节`
     };
     resetPractice();
@@ -358,35 +371,76 @@
     exercise = { items, text, chars: Array.from(text), grouped: mode !== 'daily', sentenceMode: mode === 'daily', title, caption, day };
     resetPractice();
   }
+  function refreshStudioCount() {
+    const parsed = parsePassage($('studio-text').value);
+    $('studio-count').textContent = `${parsed.length} / ${maxLength} 字符`;
+    $('studio-error').hidden = true;
+    return parsed;
+  }
+  function loadStudio(items = studioItems, focusSource) {
+    section = 'studio';
+    if (!focusSource) studioItems = items;
+    const text = items.join('');
+    exercise = {
+      items, text, chars: Array.from(text), sentenceMode: true, grouped: false, focusSource,
+      title: focusSource ? '重练片段' : '跟打原文', caption: `${Array.from(text).length} 字符 · ${items.length} 段`
+    };
+    $('studio-form').hidden = items.length > 0;
+    $('studio-source').hidden = !items.length;
+    $('studio-cancel').hidden = !items.length;
+    $('studio-summary').textContent = focusSource ? '正在重练一个片段，完成后可以回到原文重测。' : '原文仅在本机处理，未完成练习可续练。';
+    $('studio-text').value = (focusSource?.items || items).join('');
+    refreshStudioCount();
+    resetPractice();
+  }
+  function loadSavedExercise(config) {
+    if (!config || !Array.isArray(config.items)) return false;
+    const { items } = config;
+    if (config.section === 'intro' && Number.isInteger(config.selected) && lessons[config.selected]) {
+      const expected = lessons[config.selected].items;
+      if (items.length !== expected.length || !items.every((item, i) => item === expected[i])) return false;
+      loadIntro(config.selected);
+    } else if (config.section === 'random') {
+      const values = readSettings(config.settings);
+      const level = levels.find(item => item.id === values.level);
+      const pool = { words: level.items, characters, sentences }[values.mode];
+      if (items.length !== modes[values.mode].counts[values.size] || !items.every(item => pool.includes(item))) return false;
+      loadRandom(values, items);
+    } else if (config.section === 'keyboard') {
+      const lesson = keyLessons[config.keyStage];
+      if (!lesson || JSON.stringify(items) !== JSON.stringify(lesson.items)) return false;
+      loadTraining('keyboard', { keyStage: config.keyStage });
+    } else if (config.section === 'review') {
+      if (!items.length || items.length > 8 || !items.every(isReviewItem)) return false;
+      loadTraining('review', { items });
+    } else if (config.section === 'daily') {
+      if (!validDay(config.day) || items.length !== 3 || new Set(items).size !== 3 || !items.every(item => sentences.includes(item))) return false;
+      loadTraining('daily', { day: config.day, items });
+    } else if (config.section === 'studio') {
+      const length = Array.from(items.join('')).length;
+      if (!items.length || length > maxLength || !items.every(item => typeof item === 'string' && item.length)) return false;
+      const source = config.focusSource;
+      if (source && (!Array.isArray(source.items) || !source.items.every(item => typeof item === 'string') || source.focusSource)) return false;
+      loadStudio(items, source);
+    } else return false;
+    return true;
+  }
   function restoreDraft(draft) {
     if (!draft || typeof draft.id !== 'string' || typeof draft.text !== 'string' || !Array.isArray(draft.items)) return false;
     if (!Number.isFinite(draft.elapsed) || draft.elapsed < 0 || !Number.isSafeInteger(draft.attempts) || !Number.isSafeInteger(draft.hits) || draft.hits < 0 || draft.attempts < draft.hits) return false;
-    if (draft.section === 'intro' && Number.isInteger(draft.selected) && lessons[draft.selected]) {
-      const items = lessons[draft.selected].items;
-      if (draft.items.length !== items.length || !draft.items.every((item, i) => item === items[i])) return false;
-      loadIntro(draft.selected);
-    } else if (draft.section === 'random') {
-      const config = readSettings(draft.settings);
-      const level = levels.find(item => item.id === config.level);
-      const pool = { words: level.items, characters, sentences }[config.mode];
-      if (draft.items.length !== modes[config.mode].counts[config.size] || !draft.items.every(item => pool.includes(item))) return false;
-      loadRandom(config, draft.items);
-    } else if (draft.section === 'keyboard') {
-      const lesson = keyLessons[draft.keyStage];
-      if (!lesson || JSON.stringify(draft.items) !== JSON.stringify(lesson.items)) return false;
-      loadTraining('keyboard', { keyStage: draft.keyStage });
-    } else if (draft.section === 'review') {
-      if (!draft.items.length || draft.items.length > 8 || !draft.items.every(isReviewItem)) return false;
-      loadTraining('review', { items: draft.items });
-    } else if (draft.section === 'daily') {
-      if (!validDay(draft.day) || draft.items.length !== 3 || new Set(draft.items).size !== 3 || !draft.items.every(item => sentences.includes(item))) return false;
-      loadTraining('daily', { day: draft.day, items: draft.items });
-    } else return false;
+    if (!loadSavedExercise(draft)) return false;
     attemptId = draft.id;
     input.value = previous = draft.text;
     elapsed = draft.elapsed;
     attempts = draft.attempts;
     hits = draft.hits;
+    if (trace.length) {
+      trace = makeTrace(exercise.items, Array.isArray(draft.trace) ? draft.trace : undefined);
+      if (!Array.isArray(draft.trace)) {
+        const wrong = firstError();
+        updateTrace(trace, { prefix: wrong < 0 ? Array.from(previous).length : wrong, wrong, editStart: 0, editEnd: 0, time: elapsed });
+      }
+    }
     missedItems = new Set(Array.isArray(draft.misses) ? draft.misses.filter(isReviewItem).slice(0, 80) : []);
     pausePractice('已恢复上次练习，点击“继续练习”开始计时。');
     renderText();
@@ -434,13 +488,61 @@
     previous = next.join('');
     const wrong = firstError();
     collectMiss(next, wrong, prefix, editEnd);
+    if (trace.length) {
+      let matched = wrong < 0 ? next.length : wrong;
+      if (matched === exercise.chars.length && next.length > matched) matched--;
+      updateTrace(trace, { prefix: matched, wrong, editStart: prefix, editEnd, time: duration() });
+    }
     renderText();
     $('input-help').textContent = next.length > exercise.chars.length ? `多输入了 ${next.length - exercise.chars.length} 个字符，请删除多余内容。`
       : section === 'keyboard' && /[^a-z;]/u.test(previous) ? '请切到英文小写，使用半角分号。'
-      : /\s/u.test(previous) ? '这里不用输入空格或换行，请删除后继续。'
+      : section !== 'studio' && /\s/u.test(previous) ? '这里不用输入空格或换行，请删除后继续。'
       : wrong >= 0 ? `第 ${wrong + 1} 个字符不一致，请检查错字或漏字。` : '目前输入正确。';
     if (previous === exercise.text) finish(); else saveDraft();
   }
+  function renderPassageReport() {
+    const rows = reportRows(trace);
+    $('passage-report').hidden = !rows.length;
+    $('report-open').hidden = !rows.length;
+    if (!rows.length) return;
+    const suggested = recommendedSegment(rows);
+    const source = describeExercise();
+    $('report-overview').textContent = suggested ? `建议先练第 ${suggested.index + 1} 段 · ${suggested.reason}`
+      : '这次没有明显的卡点，可以选任意一段重练。';
+    $('report-segments').replaceChildren(...rows.map(row => {
+      const item = document.createElement('li');
+      const recommended = row.index === suggested?.index;
+      item.classList.toggle('report-recommended', recommended);
+      const body = document.createElement('div');
+      const caption = document.createElement('strong');
+      const seconds = row.ms === null ? '耗时无法拆分' : `用时 ${(row.ms / 1000).toFixed(1)} 秒`;
+      caption.textContent = `第 ${row.index + 1} 段 · ${row.errors ? `错位 ${row.errors} 次` : '无错位'} · ${seconds}`;
+      const wording = document.createElement('p');
+      wording.textContent = row.text;
+      body.append(caption, wording);
+      const button = document.createElement('button');
+      button.className = recommended ? 'primary-button' : 'secondary-button';
+      button.textContent = '重练此段';
+      button.setAttribute('aria-label', `重练第 ${row.index + 1} 段`);
+      button.addEventListener('click', () => {
+        loadStudio([row.text], source);
+        input.focus();
+      });
+      item.append(body, button);
+      return item;
+    }));
+  }
+
+  function showComparison(score, prior) {
+    $('result-comparison').hidden = !prior;
+    if (!prior) return;
+    const pace = score.speed - prior.speed;
+    const precision = score.accuracy - prior.accuracy;
+    const speedChange = pace === 0 ? '速度持平' : `速度${pace > 0 ? '快' : '慢'} ${Math.abs(pace)} ${speedUnit()}`;
+    const accuracyChange = precision === 0 ? '准确率持平' : `准确率${precision > 0 ? '提高' : '降低'} ${Math.abs(precision)} 个百分点`;
+    $('result-comparison').textContent = `与上次同篇相比，${speedChange}，${accuracyChange}。`;
+  }
+
   function finish() {
     stopClock(); completed = true; pauseRequested = false; input.readOnly = true;
     $('pause').disabled = true;
@@ -451,10 +553,12 @@
       id: attemptId, mode: section === 'random' ? settings.mode : section,
       title: exercise.title, at: Date.now(), elapsed, ...score, stars
     };
-    let isNew = false, newDailyBest = false;
+    if (trace.length) entry.material = materialId(exercise.text);
+    let isNew = false, newDailyBest = false, previousScore;
     updateSession(data => {
       const history = Array.isArray(data.history) ? data.history : [];
       isNew = !history.some(item => item?.id === attemptId);
+      if (entry.material) previousScore = history.find(item => item?.material === entry.material && item.mode === entry.mode && item.id !== attemptId && Number.isFinite(item.speed) && Number.isFinite(item.accuracy));
       const updated = { ...data, draft: data.draft?.id === attemptId ? null : data.draft };
       if (!isNew) return updated;
       updated.history = [entry, ...history].slice(0, 100);
@@ -482,6 +586,7 @@
     $('result-title').textContent = lesson ? `本课完成 · ${stars} / 5 星` : '练习完成';
     $('result-detail').textContent = `${score.speed} ${speedUnit()} · 准确率 ${score.accuracy}% · 用时 ${durationLabel(elapsed)}`;
     $('result-advice').hidden = !lesson && section !== 'daily' && section !== 'keyboard' && section !== 'review';
+    showComparison(score, previousScore);
     $('review-misses').hidden = !missedItems.size;
     if (lesson) {
       $('result-advice').textContent = stars === 5 ? '已达五星目标。'
@@ -500,10 +605,11 @@
     const nextLabels = {
       random: '练习下一组', intro: selected < lessons.length - 1 ? '下一节' : '再练一次',
       keyboard: keyStage < keyLessons.length - 1 ? '下一阶段' : '再练一次', review: '查看待复练',
-      daily: exercise.day === dayKey() ? '再挑战一次' : '练今天的挑战'
+      daily: exercise.day === dayKey() ? '再挑战一次' : '练今天的挑战',
+      studio: exercise.focusSource ? '回到原文重测' : '再打一遍原文'
     };
     $('next').textContent = nextLabels[section];
-    renderNavigation(); renderText();
+    renderNavigation(); renderText(); renderPassageReport();
   }
   const historyDate = new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   function renderHistory() {
@@ -521,7 +627,7 @@
     $('history-rows').replaceChildren(...shown.map(item => {
       const row = document.createElement('tr');
       const title = item.stars ? `${item.title} · ${item.stars} 星` : item.title;
-      const pace = `${item.speed} ${item.mode === 'keyboard' ? '字符/分钟' : '字/分钟'}`;
+      const pace = `${item.speed} ${['keyboard', 'studio'].includes(item.mode) ? '字符/分钟' : '字/分钟'}`;
       for (const value of [historyDate.format(item.at), title, durationLabel(item.elapsed), pace, `${item.accuracy}%`]) {
         row.insertCell().textContent = value;
       }
@@ -548,6 +654,30 @@
   $('training-tab').addEventListener('click', () => {
     if (!Object.hasOwn(trainingModes, section)) requestChange(() => loadTraining(lastTraining));
   });
+  $('studio-tab').addEventListener('click', () => {
+    if (section === 'studio') return;
+    requestChange(() => {
+      loadStudio();
+      if (!exercise.items.length) $('studio-text').focus();
+    });
+  });
+  $('studio-edit').addEventListener('click', () => {
+    $('studio-form').hidden = false;
+    $('studio-text').focus();
+  });
+  $('studio-cancel').addEventListener('click', () => { $('studio-form').hidden = true; $('studio-edit').focus(); });
+  $('studio-text').addEventListener('input', refreshStudioCount);
+  $('studio-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const { items } = refreshStudioCount();
+    if (!items) {
+      $('studio-error').textContent = '请将原文调整为 10–600 个字符。';
+      $('studio-error').hidden = false;
+      $('studio-text').focus();
+      return;
+    }
+    requestChange(() => { loadStudio(items); input.focus(); });
+  });
   $('key-stage').addEventListener('change', () => {
     const stage = Number($('key-stage').value);
     if (keyLessons[stage]) requestChange(() => loadTraining('keyboard', { keyStage: stage }));
@@ -565,6 +695,10 @@
   $('review-misses').addEventListener('click', () => {
     loadTraining('review', { items: [...missedItems].slice(0, 8) });
     input.focus();
+  });
+  $('report-open').addEventListener('click', () => {
+    $('passage-report-title').focus({ preventScroll: true });
+    $('passage-report').scrollIntoView({ block: 'start' });
   });
   $('continue-course').addEventListener('click', () => {
     const next = recommendedLesson()?.index ?? 0;
@@ -586,6 +720,11 @@
     if (section === 'random') loadRandom();
     else if (section === 'intro') loadIntro(Math.min(selected + 1, lessons.length - 1));
     else if (section === 'keyboard') loadTraining('keyboard', { keyStage: Math.min(keyStage + 1, keyLessons.length - 1) });
+    else if (section === 'studio') {
+      const source = exercise.focusSource;
+      if (!source) resetPractice();
+      else if (!loadSavedExercise(source)) loadStudio(source.items);
+    }
     else loadTraining(section);
     if (exercise.items.length) input.focus(); else $('review-seed').focus();
   });

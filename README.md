@@ -35,6 +35,12 @@
 
 键位教学参考 [TypingClub 教学手册](https://static.typingclub.com/m/edclubdocs/media/pdf/Grade10_Typing_Handbook.pdf)及[联想社区的指法说明](https://club.lenovo.com.cn/thread-7943975-1-1.html)。[Emacs China 的指法讨论](https://emacs-china.org/t/topic/12132)涉及中文选字习惯和不同输入法的差异。针对错误复练参考 [Monkeytype 项目讨论](https://github.com/monkeytypegame/monkeytype/discussions/8262)中的考后复练设计。
 
+## 文本训练与分段回顾
+
+在“文本训练”中粘贴 10–600 个字符。换行用于分段，标点和句中的空格照原文输入。长段会按句末标点或长度拆开，以便读和练。未完成的输入、原文和分段计时保存在当前浏览器，可在关闭后继续。练习记录保留分数和素材标识，不保留原文。
+
+自定义文本、系统课程的句子和篇章、随机句子、每日挑战完成后会显示分段回顾。报告优先推荐出错较多的段；没有出错时，才会根据可区分的每字用时提示明显较慢的段。组字或后补前文导致多段同时通过核对时，相应片段不单独估算用时。点击某段的“重练此段”，练完后可回到同一篇原文。重测结果与同模式下上次完成这篇原文的成绩比较。
+
 ## 统计说明
 
 速度 = 当前正确字符数 / 有效练习分钟数（最短按 1 秒计算，包含标点）；准确率 = 正确提交字符数 / 总提交字符数，修改不会清除先前错误，删除不计为新输入。候选拼音不计入字符统计。不同长度、模式和输入法下的成绩不宜直接比较。
@@ -43,7 +49,7 @@
 
 ## GitHub Pages 发布
 
-网站是纯静态页面。将 `index.html`、`style.css`、`app.js`、`practice-data.js`、`course-data.js`、`training-data.js` 和 `.nojekyll` 推送到打字网站仓库的 `main` 分支根目录。GitHub Pages 使用 **Deploy from a branch → main → /(root)**。项目站使用 `https://<账号>.github.io/<仓库名>/`，页面资产均使用相对路径。
+网站是纯静态页面。将 `index.html`、`style.css`、`app.js`、`practice-data.js`、`course-data.js`、`training-data.js`、`passage-data.js` 和 `.nojekyll` 推送到打字网站仓库的 `main` 分支根目录。GitHub Pages 使用 **Deploy from a branch → main → /(root)**。项目站使用 `https://<账号>.github.io/<仓库名>/`，页面资产均使用相对路径。
 
 网站使用系统字体，练习内容和功能由同站文件提供。访问 GitHub Pages 域名的网络可达性取决于访问者所在网络。线上站点与先前直接打开本地文件的练习进度各自保存在浏览器中。
 
